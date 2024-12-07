@@ -14,12 +14,12 @@ import seaborn as sns
 from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import label_binarize
-# import warnings
+import warnings
 from wordcloud import WordCloud
 
 
-# warnings.simplefilter(action='ignore', category=FutureWarning)
-# @st.cache_data
+warnings.simplefilter(action='ignore', category=FutureWarning)
+@st.cache_data
 def load_data():
     data = pd.read_csv("data1.csv")
     san_pham = pd.read_csv("San_pham.csv")
@@ -63,6 +63,9 @@ cr = classification_report(y_test, y_pred)
 y_prob = model.predict_proba(X_test)
 # roc = roc_auc_score(y_test, y_prob[:, 1])
 
+# product_mapping = dict(zip(filtered_products["ten_san_pham"], filtered_products["ma_san_pham"]))
+# product_id = product_mapping[product_name]
+
 #5. Save models
 # luu model classication
 pkl_filename = "Sentiment_model.pkl"  
@@ -100,7 +103,7 @@ with open(pkl_tfidf, 'rb') as file:
 st.title("Data Science Project")
 st.write("## Sentiment Model")
 
-menu = ["Business Objective", "Build Project", "New Prediction", "Item Code"]
+menu = ["Business Objective", "Build Project", "Item Code", "New Prediction"]
 choice = st.sidebar.selectbox('Menu', menu)
 st.sidebar.write("""#### Thành viên thực hiện:
                  Phan Thanh Sang & Tạ Quang Hưng""")
@@ -151,37 +154,40 @@ elif choice == 'Build Project':
     st.write("##### 5. Summary: This model is good enough for customer feedback classification.")
 
 elif choice == 'Item Code':
-    st.subheader("Review item") 
-    product_mapping = dict(zip(san_pham["ten_san_pham"], san_pham["ma_san_pham"]))
-    product_name = st.selectbox("Chọn tên sản phẩm:", options=product_mapping.keys())
-    product_name = st.selectbox("Chọn sản phẩm bạn thích:", san_pham["ten_san_pham"].unique())
-    product_id = product_mapping[product_name]
-    
-    st.write(f"### Sản phẩm được chọn: {product_name} (Mã sản phẩm: {product_id})")
-    product_data = data[data["ma_san_pham"] == product_id]
-
-    if product_data.empty:
-        st.warning("Không có dữ liệu phản hồi cho sản phẩm này.")
+    st.subheader("Review item")
+    search_query = st.text_input("Tìm kiếm sản phẩm:", "") 
+    filtered_products = san_pham[san_pham["ten_san_pham"].str.contains(search_query, case=False, na=False)] if search_query else san_pham
+    if filtered_products.empty:
+        st.warning("Không tìm thấy sản phẩm nào.")
     else:
-        positive_reviews = product_data[product_data["sentiment"] == "positive"]
-        negative_reviews = product_data[product_data["sentiment"] == "negative"]
+        product_mapping = dict(zip(filtered_products["ten_san_pham"], filtered_products["ma_san_pham"]))
+        product_name = st.selectbox("Chọn tên sản phẩm:", options=product_mapping.keys())
+        # product_name = st.selectbox("Chọn sản phẩm bạn thích:", san_pham["ten_san_pham"].unique())
+        product_id = product_mapping[product_name]
+        
+        st.write(f"### Sản phẩm được chọn: {product_name} (Mã sản phẩm: {product_id})")
+        product_data = data[data["ma_san_pham"] == product_id]
 
-    info_tabs = st.tabs(['Đánh giá từ khách hàng', 'Wordcloud'])
+        if product_data.empty:
+            st.warning("Không có dữ liệu phản hồi cho sản phẩm này.")
+        else:
+            positive_reviews = product_data[product_data["sentiment"] == "Positive"]
+            negative_reviews = product_data[product_data["sentiment"] == "Negative"]
 
-    with info_tabs[0]:
-        st.write("### Đánh giá từ khách hàng")
-        st.write(f"#### Số nhận xét tích cực: {len(positive_reviews)}")
-        st.write(f"#### Số nhận xét tiêu cực: {len(negative_reviews)}")
+    
+            st.write("### Đánh giá từ khách hàng")
+            st.write(f"#### Số nhận xét tích cực: {len(positive_reviews)}")
+            st.write(f"#### Số nhận xét tiêu cực: {len(negative_reviews)}")
 
-    with info_tabs[1]:
-        st.write("### Word Cloud")
-        if not positive_reviews.empty:
-            st.write("#### Positive Reviews:")
-            generate_wordcloud(positive_reviews["noi_dung_binh_luan_sau_xu_ly"], "Positive Reviews")
+    
+            st.write("### Word Cloud")
+            if not positive_reviews.empty:
+                st.write("#### Positive Reviews:")
+                generate_wordcloud(positive_reviews["noi_dung_binh_luan_sau_xu_ly"], "Positive Reviews")
 
-        if not negative_reviews.empty:
-            st.write("#### Negative Reviews:")
-            generate_wordcloud(negative_reviews["noi_dung_binh_luan_sau_xu_ly"], "Negative Reviews")
+            if not negative_reviews.empty:
+                st.write("#### Negative Reviews:")
+                generate_wordcloud(negative_reviews["noi_dung_binh_luan_sau_xu_ly"], "Negative Reviews")
 
 elif choice == 'New Prediction':
     st.subheader("Select data")
