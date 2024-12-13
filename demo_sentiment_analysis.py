@@ -5,12 +5,13 @@ import seaborn as sns
 import pickle
 import streamlit as st
 from wordcloud import WordCloud
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 # Read data
 data = pd.read_csv("Danh_gia_final.csv", encoding='utf-8')
 data['sentiment'] = data['so_sao'].apply(lambda x: 'positive' if x > 3 else ('neutral' if x == 3 else 'negative'))
 
-data_san_pham = pd.read_csv("Danh_gia_final.csv", encoding='utf-8')
+data_san_pham = pd.read_csv("San_pham.csv", encoding='utf-8')
 
 #--------------
 # GUI
@@ -115,40 +116,62 @@ elif menu == 'Thực Hiện Dự Án':
     """)
 
 elif menu == 'Dự Đoán Cảm Xúc':
-    #6. Load models 
     # Đọc model
-    # import pickle
     with open('Logistic Regression.pkl', 'rb') as file:  
         svm_model = pickle.load(file)
     # doc model count len
     with open('tfidf_vectorizer.pkl', 'rb') as file:  
         count_model = pickle.load(file)
 
-    st.subheader("Select data")
+    st.subheader("Chọn dữ liệu")
     flag = False
     lines = None
+
     type = st.radio("Bạn muốn tải lên hay nhập vào?", options=("Tải lên", "Nhập"))
     if type=="Tải lên":
+        # Hướng dẫn tải tệp
+        st.write("📄 **Hướng dẫn tải tệp:**")
+        st.write("- Định dạng tệp: `.txt` hoặc `.csv`.")
+        st.write("- Mỗi dòng trong tệp tương ứng với một bình luận, ví dụ:")
+        st.code("Dịch vụ rất tốt\nThái độ nhân viên không chuyên nghiệp\nChất lượng sản phẩm ổn")
+
         # Upload file
         uploaded_file_1 = st.file_uploader("Chọn file (csv hoặc txt)", type=['txt', 'csv'])
         if uploaded_file_1 is not None:
             lines = pd.read_csv(uploaded_file_1, header=None)
             st.dataframe(lines)            
-            lines = lines[0]     
-            flag = True                          
-    if type=="Nhập":        
-        content = st.text_area(label="Nhập nội dung:")
-        if content!="":
-            lines = np.array([content])
-            flag = True
+            lines = lines[0].astype(str)                          
+    elif type=="Nhập":
+        # Hướng dẫn nhập nội dung
+        st.write("✏️ **Hướng dẫn nhập nội dung:**")
+        st.write("- Nhập từng bình luận trên mỗi dòng.")
+        st.write("- Ví dụ:")
+        st.code("Dịch vụ rất tốt\nThái độ nhân viên không chuyên nghiệp\nChất lượng sản phẩm ổn")
 
-    if flag:
-        st.write("Nội dung:")
-        if len(lines)>0:
-            st.code(lines)        
+        # Nhập nội dung
+        content = st.text_area(label="Nhập nội dung:")
+        if content.strip():
+            lines = np.array(content.splitlines())  # Tách từng dòng
+
+    # Nút dự đoán
+    if st.button("Dự đoán"):
+        if lines is not None and len(lines) > 0:
+            # Thực hiện dự đoán
+            st.write("🔍 **Kết quả Dự đoán:**")
             x_new = count_model.transform(lines)        
-            y_pred_new = svm_model.predict(x_new)       
-            st.code("Dự đoán mới (Positive, Neutral, Negative): " + str(y_pred_new)) 
+            y_pred_new = svm_model.predict(x_new)
+            
+            # Hiển thị kết quả bằng thẻ cảm xúc
+            for i, line in enumerate(lines):
+                emotion = y_pred_new[i]
+                if emotion == "positive":
+                    st.success(f"**Bình luận:** {line}\n\n**Cảm xúc:** 😄 Tích cực")
+                elif emotion == "negative":
+                    st.error(f"**Bình luận:** {line}\n\n**Cảm xúc:** 😡 Tiêu cực")
+                else:
+                    st.info(f"**Bình luận:** {line}\n\n**Cảm xúc:** 😐 Trung lập")
+        else:
+            st.warning("Vui lòng nhập dữ liệu hoặc tải lên file để dự đoán!")
 
 elif menu == 'Xây Dựng Mô Hình':
     st.subheader("Xây dựng mô hình")
@@ -190,16 +213,22 @@ elif menu == 'Xây Dựng Mô Hình':
     st.write("=> Chọn mô hình **Logistic Regression** khi cho kết quả dự đoán tốt.")
 
 elif menu == "Các Chức Năng Khác":
-    tab1, tab2 = st.tabs(["🔍 Phân tích sản phẩm", "Content-Based Filtering"])
+    tab1, tab2, tab3 = st.tabs(["🔍 Phân tích sản phẩm", "🙆‍♂️ Khách hàng nổi bật", "⌚ So sánh cảm xúc theo thời gian"])
     with tab1:
         st.subheader("Phân tích WordCloud theo sản phẩm")
-        
-        # Chọn mã sản phẩm
-        product_ids = data['ma_san_pham'].unique()
-        selected_product = st.selectbox("Chọn sản phẩm:", product_ids)
 
-        # Lọc dữ liệu theo sản phẩm
-        product_data = data[data['ma_san_pham'] == selected_product]
+        # Kết hợp dữ liệu từ hai bảng
+        merged_data = data.merge(data_san_pham, on="ma_san_pham", how="inner")
+
+        # Chọn mã sản phẩm
+        product_names  = merged_data['ten_san_pham'].unique()
+        selected_product_name = st.selectbox("Chọn sản phẩm:", product_names)
+
+        # Lấy mã sản phẩm tương ứng với tên sản phẩm đã chọn
+        selected_product_id = merged_data[merged_data['ten_san_pham'] == selected_product_name]['ma_san_pham'].iloc[0]
+
+        # Lọc dữ liệu theo mã sản phẩm
+        product_data = merged_data[merged_data['ma_san_pham'] == selected_product_id]
 
         if len(product_data) > 0:
             # Phân loại tích cực/tiêu cực
@@ -210,18 +239,102 @@ elif menu == "Các Chức Năng Khác":
             positive_text = " ".join(positive_reviews.astype(str))
             negative_text = " ".join(negative_reviews.astype(str))
 
-            wordcloud_positive = WordCloud(max_words=50, width=800, height=400, background_color="white").generate(positive_text)
-            wordcloud_negative = WordCloud(max_words=50, width=800, height=400, background_color="black").generate(negative_text)
+            if positive_text.strip():
+                wordcloud_positive = WordCloud(max_words=50, width=800, height=400, background_color="white").generate(positive_text)
+                st.write(f"Tổng số bình luận tích cực: {len(positive_reviews)}")
+                st.write("### WordCloud Tích Cực")
+                st.image(wordcloud_positive.to_array())
+            else:
+                st.write("Không có dữ liệu đủ để tạo WordCloud Tích Cực.")
 
-            # Hiển thị tổng số bình luận
-            st.write(f"Tổng số bình luận tích cực: {len(positive_reviews)}")
-            st.write(f"Tổng số bình luận tiêu cực: {len(negative_reviews)}")
-
-            # Hiển thị WordCloud
-            st.write("### WordCloud Tích Cực")
-            st.image(wordcloud_positive.to_array())
-
-            st.write("### WordCloud Tiêu Cực")
-            st.image(wordcloud_negative.to_array())
+            if negative_text.strip():
+                wordcloud_negative = WordCloud(max_words=50, width=800, height=400, background_color="black").generate(negative_text)
+                st.write(f"Tổng số bình luận tiêu cực: {len(negative_reviews)}")
+                st.write("### WordCloud Tiêu Cực")
+                st.image(wordcloud_negative.to_array())
+            else:
+                st.write("Không có dữ liệu đủ để tạo WordCloud Tiêu Cực.")
         else:
             st.write("Không có dữ liệu cho sản phẩm này.")
+
+
+    with tab2:
+        # Tính năng: Phân tích khách hàng nổi bật
+        st.write("### Phân tích khách hàng nổi bật")
+        
+        # Tính số lượng bình luận của mỗi khách hàng
+        customer_comments = data.groupby('ma_khach_hang')['noi_dung_binh_luan'].count().sort_values(ascending=False)
+        
+        # Hiển thị 10 khách hàng bình luận nhiều nhất
+        top_customers = customer_comments.head(10)
+        
+        # Biểu đồ cột hiển thị khách hàng bình luận nhiều nhất
+        fig, ax = plt.subplots(figsize=(10, 6))
+        top_customers.plot(kind='bar', color='skyblue', ax=ax)
+        ax.set_title('10 khách hàng bình luận nhiều nhất', fontsize=16)
+        ax.set_xlabel('Mã khách hàng', fontsize=12)
+        ax.tick_params(axis='x', rotation=45) 
+        ax.set_ylabel('Số bình luận', fontsize=12)
+        st.pyplot(fig)
+
+        # Phân tích khách hàng có số sao cực kỳ cao hoặc thấp
+        top_positive_customers = data[data['so_sao'] == 5].groupby('ma_khach_hang')['noi_dung_binh_luan'].count().sort_values(ascending=False).head(10)
+        top_negative_customers = data[data['so_sao'] == 1].groupby('ma_khach_hang')['noi_dung_binh_luan'].count().sort_values(ascending=False).head(10)
+
+        # Tạo bảng cho khách hàng tích cực (5 sao)
+        st.write("### Khách hàng có số sao cực kỳ cao (Tích cực - 5 sao):")
+        st.dataframe(top_positive_customers)
+
+        # Biểu đồ cột cho khách hàng tích cực
+        fig, ax = plt.subplots(figsize=(10, 6))
+        top_positive_customers.plot(kind='bar', color='green', ax=ax)
+        ax.set_title('Khách hàng Tích Cực (5 sao)', fontsize=16)
+        ax.set_xlabel('Mã khách hàng', fontsize=12)
+        ax.tick_params(axis='x', rotation=45) 
+        ax.set_ylabel('Số bình luận', fontsize=12)
+        st.pyplot(fig)
+
+        # Tạo bảng cho khách hàng tiêu cực (1 sao)
+        st.write("### Khách hàng có số sao cực kỳ thấp (Tiêu cực - 1 sao):")
+        st.dataframe(top_negative_customers)
+
+        # Biểu đồ cột cho khách hàng tiêu cực
+        fig, ax = plt.subplots(figsize=(10, 6))
+        top_negative_customers.plot(kind='bar', color='red', ax=ax)
+        ax.set_title('Khách hàng Tiêu Cực (1 sao)', fontsize=16)
+        ax.set_xlabel('Mã khách hàng', fontsize=12)
+        ax.tick_params(axis='x', rotation=45) 
+        ax.set_ylabel('Số bình luận', fontsize=12)
+        st.pyplot(fig)
+
+    with tab3:
+        st.write("### So sánh cảm xúc theo thời gian")
+    
+        # Chuyển đổi cột 'ngay_binh_luan' sang datetime, thay thế các giá trị không hợp lệ bằng NaT
+        data['ngay_binh_luan'] = pd.to_datetime(data['ngay_binh_luan'], errors='coerce')
+        
+        # Loại bỏ các dòng có giá trị NaT (ngày không hợp lệ)
+        data = data.dropna(subset=['ngay_binh_luan'])
+        
+        # Phân loại cảm xúc theo số sao
+        data['cam_xuc'] = data['so_sao'].apply(lambda x: 'Positive' if x >= 4 else ('Negative' if x <= 3 else 'Neutral'))
+        
+        # Thêm cột tháng/năm để phân tích theo thời gian
+        data['thang_nam'] = data['ngay_binh_luan'].dt.to_period('M')
+
+        # Tính số lượng các cảm xúc theo tháng
+        emotion_count_by_month = data.groupby(['thang_nam', 'cam_xuc']).size().unstack(fill_value=0)
+        
+        # Tạo biểu đồ so sánh cảm xúc theo thời gian
+        fig, ax = plt.subplots(figsize=(10, 6))
+        emotion_count_by_month.plot(kind='line', marker='o', ax=ax, color=['green', 'red', 'blue'])
+        
+        ax.set_title('So sánh cảm xúc theo thời gian', fontsize=16)
+        ax.set_xlabel('Thời gian (Tháng/Năm)', fontsize=12)
+        ax.set_ylabel('Số lượng bình luận', fontsize=12)
+        ax.set_xticklabels(emotion_count_by_month.index.astype(str), rotation=45)
+        st.pyplot(fig)
+        
+        # Hiển thị bảng số liệu
+        st.write("### Số lượng bình luận phân theo cảm xúc theo tháng")
+        st.dataframe(emotion_count_by_month)
