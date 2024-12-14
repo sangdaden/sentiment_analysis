@@ -118,7 +118,7 @@ elif menu == 'Thực Hiện Dự Án':
 elif menu == 'Dự Đoán Cảm Xúc':
     # Đọc model
     with open('Logistic Regression.pkl', 'rb') as file:  
-        svm_model = pickle.load(file)
+        model = pickle.load(file)
     # doc model count len
     with open('tfidf_vectorizer.pkl', 'rb') as file:  
         count_model = pickle.load(file)
@@ -159,7 +159,7 @@ elif menu == 'Dự Đoán Cảm Xúc':
             # Thực hiện dự đoán
             st.write("🔍 **Kết quả Dự đoán:**")
             x_new = count_model.transform(lines)        
-            y_pred_new = svm_model.predict(x_new)
+            y_pred_new = model.predict(x_new)
             
             # Hiển thị kết quả bằng thẻ cảm xúc
             for i, line in enumerate(lines):
